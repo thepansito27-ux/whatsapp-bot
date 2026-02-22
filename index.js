@@ -1,116 +1,142 @@
-const fs = require("fs")
-
-if (fs.existsSync("./auth")) {
-  fs.rmSync("./auth", { recursive: true, force: true })
-}
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys")
+// =============================
+// IMPORTS
+// =============================
+const makeWASocket = require("@whiskeysockets/baileys").default
+const { useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys")
 const { Boom } = require("@hapi/boom")
-const qrcode = require("qrcode-terminal")
+const QRCode = require("qrcode")
+const express = require("express")
 
+// =============================
+// INICIAR BOT
+// =============================
 async function startBot() {
 
   const { state, saveCreds } = await useMultiFileAuthState("auth")
 
   const sock = makeWASocket({
-    auth: state
+    auth: state,
+    printQRInTerminal: false
   })
 
   sock.ev.on("creds.update", saveCreds)
 
-  // ==============================
-  // QR Y CONEXIÓN
-  // ==============================
-  const QRCode = require('qrcode')
-const fs = require('fs')
+  // =============================
+  // QR + CONEXION
+  // =============================
+  sock.ev.on("connection.update", async (update) => {
+    const { connection, lastDisconnect, qr } = update
 
-sock.ev.on('connection.update', async (update) => {
-  const { qr } = update
+    if (qr) {
+      await QRCode.toFile("qr.png", qr)
+      console.log("QR guardado como qr.png")
+    }
 
-  if (qr) {
-    await QRCode.toFile('qr.png', qr)
-    console.log('QR guardado como qr.png')
-  }
-})
-  // ==============================
+    if (connection === "open") {
+      console.log("BOT CONECTADO ✅")
+    }
+
+    if (connection === "close") {
+      const shouldReconnect =
+        (lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut
+
+      if (shouldReconnect) {
+        console.log("Reconectando...")
+        startBot()
+      } else {
+        console.log("Sesión cerrada")
+      }
+    }
+  })
+
+  // =============================
   // BIENVENIDA
-  // ==============================
+  // =============================
   sock.ev.on("group-participants.update", async (update) => {
     const { id, participants, action } = update
 
     if (action === "add") {
       for (let user of participants) {
         await sock.sendMessage(id, {
-          text: `?? Bienvenido @${user.split("@")[0]} al grupo!`,
+          text: `👋 Bienvenido @${user.split("@")[0]} al grupo`,
           mentions: [user]
         })
       }
     }
   })
 
-  // ==============================
+  // =============================
   // MENSAJES
-  // ==============================
+  // =============================
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0]
     if (!msg.message) return
 
-    const from = msg.key.remoteJid
-    if (!from.endsWith("@g.us")) return
+    // SOPORTE MENSAJES EFIMEROS
+    const message = msg.message?.ephemeralMessage?.message || msg.message
 
-    const sender = msg.key.participant
-    const text =
-      msg.message.conversation ||
-      msg.message.extendedTextMessage?.text
+    const text = (
+      message?.conversation ||
+      message?.extendedTextMessage?.text ||
+      ""
+    ).toLowerCase().trim()
 
     if (!text) return
 
+    console.log("MENSAJE:", text)
+
+    const from = msg.key.remoteJid
+    const sender = msg.key.participant || msg.key.remoteJid
+
+    if (!from.endsWith("@g.us")) return
+
     const metadata = await sock.groupMetadata(from)
     const admins = metadata.participants
-      .filter(p => p.admin !== null)
+      .filter(p => p.admin)
       .map(p => p.id)
 
     const isAdmin = admins.includes(sender)
 
-    // ==============================
+    // =============================
     // ANTI LINKS
-    // ==============================
+    // =============================
     if (text.includes("http") && !isAdmin) {
       await sock.sendMessage(from, { delete: msg.key })
       await sock.sendMessage(from, {
-        text: `?? @${sender.split("@")[0]} no se permiten enlaces`,
+        text: `🚫 @${sender.split("@")[0]} no se permiten enlaces`,
         mentions: [sender]
       })
       return
     }
 
-    // SOLO ADMINS COMANDOS
+    // SOLO ADMINS USAN COMANDOS
     if (!isAdmin) return
 
-    // ==============================
+    // =============================
     // MENU
-    // ==============================
+    // =============================
     if (text === "!comandos") {
       await sock.sendMessage(from, {
         text:
-`?? BOT DEL GRUPO
+`🤖 BOT DEL GRUPO
 
-?? Moderación:
+📌 Moderación:
 !eliminar (responde mensaje)
 !cerrar
 !abrir
 !todos
 
-? Juegos:
+⚽ Juegos:
 !futbol`
       })
     }
 
-    // ==============================
-    // ELIMINAR USUARIO
-    // ==============================
+    // =============================
+    // ELIMINAR
+    // =============================
     if (text === "!eliminar") {
       const replied =
-        msg.message.extendedTextMessage?.contextInfo?.participant
+        message?.extendedTextMessage?.contextInfo?.participant
 
       if (!replied) {
         await sock.sendMessage(from, {
@@ -122,47 +148,47 @@ sock.ev.on('connection.update', async (update) => {
       await sock.groupParticipantsUpdate(from, [replied], "remove")
     }
 
-    // ==============================
-    // CERRAR GRUPO
-    // ==============================
+    // =============================
+    // CERRAR
+    // =============================
     if (text === "!cerrar") {
       await sock.groupSettingUpdate(from, "announcement")
-      await sock.sendMessage(from, { text: "?? Grupo cerrado" })
+      await sock.sendMessage(from, { text: "🔒 Grupo cerrado" })
     }
 
-    // ==============================
-    // ABRIR GRUPO
-    // ==============================
+    // =============================
+    // ABRIR
+    // =============================
     if (text === "!abrir") {
       await sock.groupSettingUpdate(from, "not_announcement")
-      await sock.sendMessage(from, { text: "?? Grupo abierto" })
+      await sock.sendMessage(from, { text: "🔓 Grupo abierto" })
     }
 
-    // ==============================
-    // MENCIONAR TODOS
-    // ==============================
+    // =============================
+    // TODOS
+    // =============================
     if (text === "!todos") {
       const members = metadata.participants.map(p => p.id)
       await sock.sendMessage(from, {
-        text: "?? Atención todos!",
+        text: "📢 Atención todos",
         mentions: members
       })
     }
 
-    // ==============================
-    // JUEGO FUTBOL
-    // ==============================
+    // =============================
+    // FUTBOL
+    // =============================
     if (text === "!futbol") {
       const userGoals = Math.floor(Math.random() * 5)
       const botGoals = Math.floor(Math.random() * 5)
 
-      let result = "?? Empate"
-      if (userGoals > botGoals) result = "?? Ganaste"
-      if (userGoals < botGoals) result = "?? Perdiste"
+      let result = "🤝 Empate"
+      if (userGoals > botGoals) result = "🏆 Ganaste"
+      if (userGoals < botGoals) result = "😢 Perdiste"
 
       await sock.sendMessage(from, {
         text:
-`? Partido
+`⚽ Partido
 
 Tú ${userGoals} - ${botGoals} Bot
 
@@ -172,22 +198,20 @@ ${result}`
   })
 }
 
-
 startBot()
+
 // =============================
-// SERVIDOR WEB PARA VER QR
+// SERVIDOR WEB (RENDER)
 // =============================
-const express = require('express')
 const app = express()
 
 app.use(express.static(__dirname))
 
-app.get('/', (req, res) => {
-  res.send('Bot activo ✅')
+app.get("/", (req, res) => {
+  res.send("Bot activo ✅")
 })
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
-  console.log('Servidor web listo en puerto ' + PORT)
+  console.log("Servidor web en puerto " + PORT)
 })
-
