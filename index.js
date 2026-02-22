@@ -1,3 +1,8 @@
+const fs = require("fs")
+
+if (fs.existsSync("./auth")) {
+  fs.rmSync("./auth", { recursive: true, force: true })
+}
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys")
 const { Boom } = require("@hapi/boom")
 const qrcode = require("qrcode-terminal")
@@ -13,7 +18,7 @@ async function startBot() {
   sock.ev.on("creds.update", saveCreds)
 
   // ==============================
-  // QR Y CONEXIÓN
+  // QR Y CONEXIÃ“N
   // ==============================
   sock.ev.on("connection.update", (update) => {
     const { connection, lastDisconnect, qr } = update
@@ -34,7 +39,7 @@ async function startBot() {
         console.log("?? Reconectando...")
         startBot()
       } else {
-        console.log("? Sesión cerrada")
+        console.log("? SesiÃ³n cerrada")
       }
     }
   })
@@ -102,7 +107,7 @@ async function startBot() {
         text:
 `?? BOT DEL GRUPO
 
-?? Moderación:
+?? ModeraciÃ³n:
 !eliminar (responde mensaje)
 !cerrar
 !abrir
@@ -152,7 +157,7 @@ async function startBot() {
     if (text === "!todos") {
       const members = metadata.participants.map(p => p.id)
       await sock.sendMessage(from, {
-        text: "?? Atención todos!",
+        text: "?? AtenciÃ³n todos!",
         mentions: members
       })
     }
@@ -172,12 +177,13 @@ async function startBot() {
         text:
 `? Partido
 
-Tú ${userGoals} - ${botGoals} Bot
+TÃº ${userGoals} - ${botGoals} Bot
 
 ${result}`
       })
     }
   })
 }
+
 
 startBot()
