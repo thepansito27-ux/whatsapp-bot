@@ -1,19 +1,9 @@
 // =============================
-// 🔥 BORRAR SESIÓN (SOLO UNA VEZ)
-// =============================
-const fs = require("fs")
-
-if (fs.existsSync("./auth")) {
-  fs.rmSync("./auth", { recursive: true, force: true })
-  console.log("Sesión eliminada")
-}
-// =============================
 // IMPORTS
 // =============================
 const makeWASocket = require("@whiskeysockets/baileys").default
 const { useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys")
 const { Boom } = require("@hapi/boom")
-const QRCode = require("qrcode")
 const express = require("express")
 
 // =============================
@@ -24,22 +14,29 @@ async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("auth")
 
   const sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: false
+    auth: state
   })
 
   sock.ev.on("creds.update", saveCreds)
 
   // =============================
-  // QR + CONEXION
+  // LOGIN CON CODIGO (SIN QR)
   // =============================
-  sock.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect, qr } = update
+  if (!sock.authState.creds.registered) {
 
-    if (qr) {
-      await QRCode.toFile("qr.png", qr)
-      console.log("QR guardado como qr.png")
-    }
+    const phoneNumber = "591XXXXXXXX" // 👈 CAMBIA POR TU NUMERO REAL
+
+    const code = await sock.requestPairingCode(phoneNumber)
+    console.log("=================================")
+    console.log("CODIGO DE VINCULACION:", code)
+    console.log("=================================")
+  }
+
+  // =============================
+  // CONEXION
+  // =============================
+  sock.ev.on("connection.update", (update) => {
+    const { connection, lastDisconnect } = update
 
     if (connection === "open") {
       console.log("BOT CONECTADO ✅")
@@ -53,7 +50,7 @@ async function startBot() {
         console.log("Reconectando...")
         startBot()
       } else {
-        console.log("Sesión cerrada")
+        console.log("Sesion cerrada")
       }
     }
   })
@@ -67,7 +64,7 @@ async function startBot() {
     if (action === "add") {
       for (let user of participants) {
         await sock.sendMessage(id, {
-          text: `👋 Bienvenido @${user.split("@")[0]} al grupo`,
+          text: `👋 Bienvenido @${user.split("@")[0]}`,
           mentions: [user]
         })
       }
@@ -81,7 +78,6 @@ async function startBot() {
     const msg = messages[0]
     if (!msg.message) return
 
-    // SOPORTE MENSAJES EFIMEROS
     const message = msg.message?.ephemeralMessage?.message || msg.message
 
     const text = (
@@ -118,7 +114,6 @@ async function startBot() {
       return
     }
 
-    // SOLO ADMINS USAN COMANDOS
     if (!isAdmin) return
 
     // =============================
@@ -130,7 +125,7 @@ async function startBot() {
 `🤖 BOT DEL GRUPO
 
 📌 Moderación:
-!eliminar (responde mensaje)
+!eliminar
 !cerrar
 !abrir
 !todos
@@ -149,7 +144,7 @@ async function startBot() {
 
       if (!replied) {
         await sock.sendMessage(from, {
-          text: "Responde al mensaje del usuario que quieres eliminar"
+          text: "Responde al mensaje del usuario"
         })
         return
       }
@@ -210,11 +205,9 @@ ${result}`
 startBot()
 
 // =============================
-// SERVIDOR WEB (RENDER)
+// SERVIDOR WEB (OBLIGATORIO EN RENDER)
 // =============================
 const app = express()
-
-app.use(express.static(__dirname))
 
 app.get("/", (req, res) => {
   res.send("Bot activo ✅")
@@ -222,6 +215,5 @@ app.get("/", (req, res) => {
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
-  console.log("Servidor web en puerto " + PORT)
+  console.log("Servidor web puerto " + PORT)
 })
-
