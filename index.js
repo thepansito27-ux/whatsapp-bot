@@ -20,30 +20,32 @@ async function startBot() {
   // ==============================
   // QR Y CONEXIÓN
   // ==============================
-  sock.ev.on("connection.update", (update) => {
-    const { connection, lastDisconnect, qr } = update
+  const QRCode = require("qrcode")
 
-    if (qr) {
-      console.log("?? Escanea este QR:\n")
-      qrcode.generate(qr, { small: true })
-    }
+sock.ev.on("connection.update", async (update) => {
+  const { connection, lastDisconnect, qr } = update
 
-    if (connection === "open") {
-      console.log("? Bot conectado correctamente")
-    }
+  if (qr) {
+    console.log("Escanea este QR:\n")
 
-    if (connection === "close") {
-      const shouldReconnect =
-        (lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut
-      if (shouldReconnect) {
-        console.log("?? Reconectando...")
-        startBot()
-      } else {
-        console.log("? Sesión cerrada")
-      }
-    }
-  })
+    const qrImage = await QRCode.toString(qr, {
+      type: "terminal",
+      small: false
+    })
 
+    console.log(qrImage)
+  }
+
+  if (connection === "open") {
+    console.log("✅ Bot conectado")
+  }
+
+  if (connection === "close") {
+    const shouldReconnect =
+      (lastDisconnect.error)?.output?.statusCode !== 401
+    if (shouldReconnect) startBot()
+  }
+})
   // ==============================
   // BIENVENIDA
   // ==============================
@@ -187,3 +189,4 @@ ${result}`
 
 
 startBot()
+
