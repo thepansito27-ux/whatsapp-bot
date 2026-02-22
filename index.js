@@ -20,30 +20,15 @@ async function startBot() {
   // ==============================
   // QR Y CONEXIÓN
   // ==============================
-  const QRCode = require("qrcode")
+  const QRCode = require('qrcode')
+const fs = require('fs')
 
-sock.ev.on("connection.update", async (update) => {
-  const { connection, lastDisconnect, qr } = update
+sock.ev.on('connection.update', async (update) => {
+  const { qr } = update
 
   if (qr) {
-    console.log("Escanea este QR:\n")
-
-    const qrImage = await QRCode.toString(qr, {
-      type: "terminal",
-      small: false
-    })
-
-    console.log(qrImage)
-  }
-
-  if (connection === "open") {
-    console.log("✅ Bot conectado")
-  }
-
-  if (connection === "close") {
-    const shouldReconnect =
-      (lastDisconnect.error)?.output?.statusCode !== 401
-    if (shouldReconnect) startBot()
+    await QRCode.toFile('qr.png', qr)
+    console.log('QR guardado como qr.png')
   }
 })
   // ==============================
@@ -189,4 +174,20 @@ ${result}`
 
 
 startBot()
+// =============================
+// SERVIDOR WEB PARA VER QR
+// =============================
+const express = require('express')
+const app = express()
+
+app.use(express.static(__dirname))
+
+app.get('/', (req, res) => {
+  res.send('Bot activo ✅')
+})
+
+const PORT = process.env.PORT || 3000
+app.listen(PORT, () => {
+  console.log('Servidor web listo en puerto ' + PORT)
+})
 
