@@ -5,6 +5,14 @@ const makeWASocket = require("@whiskeysockets/baileys").default
 const { useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys")
 const { Boom } = require("@hapi/boom")
 const express = require("express")
+const axios = require("axios")
+
+// =============================
+// CONFIG
+// =============================
+const PHONE_NUMBER = "59175324655" // ? TU NUMERO
+const PORT = process.env.PORT || 3000
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL || null
 
 // =============================
 // INICIAR BOT
@@ -14,22 +22,26 @@ async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("auth")
 
   const sock = makeWASocket({
-    auth: state
+    auth: state,
+    browser: ["Bot", "Chrome", "1.0"]
   })
 
   sock.ev.on("creds.update", saveCreds)
 
   // =============================
-  // LOGIN CON CODIGO (SIN QR)
+  // LOGIN SIN QR (CODIGO)
   // =============================
   if (!sock.authState.creds.registered) {
+    try {
+      const code = await sock.requestPairingCode(PHONE_NUMBER)
 
-    const phoneNumber = "59175324655" // 👈 CAMBIA POR TU NUMERO REAL
+      console.log("=================================")
+      console.log("CODIGO DE VINCULACION:", code)
+      console.log("=================================")
 
-    const code = await sock.requestPairingCode(phoneNumber)
-    console.log("=================================")
-    console.log("CODIGO DE VINCULACION:", code)
-    console.log("=================================")
+    } catch (err) {
+      console.log("Esperando reconexion para generar codigo...")
+    }
   }
 
   // =============================
@@ -39,18 +51,18 @@ async function startBot() {
     const { connection, lastDisconnect } = update
 
     if (connection === "open") {
-      console.log("BOT CONECTADO ✅")
+      console.log("BOT CONECTADO ?")
     }
 
     if (connection === "close") {
       const shouldReconnect =
-        (lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut
+        (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut
 
       if (shouldReconnect) {
         console.log("Reconectando...")
-        startBot()
+        setTimeout(startBot, 5000)
       } else {
-        console.log("Sesion cerrada")
+        console.log("Sesion cerrada manualmente")
       }
     }
   })
@@ -64,7 +76,7 @@ async function startBot() {
     if (action === "add") {
       for (let user of participants) {
         await sock.sendMessage(id, {
-          text: `👋 Bienvenido @${user.split("@")[0]}`,
+          text: `?? Bienvenido @${user.split("@")[0]}`,
           mentions: [user]
         })
       }
@@ -108,7 +120,7 @@ async function startBot() {
     if (text.includes("http") && !isAdmin) {
       await sock.sendMessage(from, { delete: msg.key })
       await sock.sendMessage(from, {
-        text: `🚫 @${sender.split("@")[0]} no se permiten enlaces`,
+        text: `?? @${sender.split("@")[0]} no se permiten enlaces`,
         mentions: [sender]
       })
       return
@@ -117,84 +129,52 @@ async function startBot() {
     if (!isAdmin) return
 
     // =============================
-    // MENU
+    // COMANDOS
     // =============================
     if (text === "!comandos") {
       await sock.sendMessage(from, {
         text:
-`🤖 BOT DEL GRUPO
+`?? BOT DEL GRUPO
 
-📌 Moderación:
 !eliminar
 !cerrar
 !abrir
 !todos
-
-⚽ Juegos:
 !futbol`
       })
     }
 
-    // =============================
-    // ELIMINAR
-    // =============================
-    if (text === "!eliminar") {
-      const replied =
-        message?.extendedTextMessage?.contextInfo?.participant
-
-      if (!replied) {
-        await sock.sendMessage(from, {
-          text: "Responde al mensaje del usuario"
-        })
-        return
-      }
-
-      await sock.groupParticipantsUpdate(from, [replied], "remove")
-    }
-
-    // =============================
-    // CERRAR
-    // =============================
     if (text === "!cerrar") {
       await sock.groupSettingUpdate(from, "announcement")
-      await sock.sendMessage(from, { text: "🔒 Grupo cerrado" })
+      await sock.sendMessage(from, { text: "?? Grupo cerrado" })
     }
 
-    // =============================
-    // ABRIR
-    // =============================
     if (text === "!abrir") {
       await sock.groupSettingUpdate(from, "not_announcement")
-      await sock.sendMessage(from, { text: "🔓 Grupo abierto" })
+      await sock.sendMessage(from, { text: "?? Grupo abierto" })
     }
 
-    // =============================
-    // TODOS
-    // =============================
     if (text === "!todos") {
       const members = metadata.participants.map(p => p.id)
       await sock.sendMessage(from, {
-        text: "📢 Atención todos",
+        text: "?? Atenci�n todos",
         mentions: members
       })
     }
 
-    // =============================
-    // FUTBOL
-    // =============================
     if (text === "!futbol") {
       const userGoals = Math.floor(Math.random() * 5)
       const botGoals = Math.floor(Math.random() * 5)
 
-      let result = "🤝 Empate"
-      if (userGoals > botGoals) result = "🏆 Ganaste"
-      if (userGoals < botGoals) result = "😢 Perdiste"
+      let result = "?? Empate"
+      if (userGoals > botGoals) result = "?? Ganaste"
+      if (userGoals < botGoals) result = "?? Perdiste"
 
       await sock.sendMessage(from, {
         text:
-`⚽ Partido
+`? Partido
 
-Tú ${userGoals} - ${botGoals} Bot
+T� ${userGoals} - ${botGoals} Bot
 
 ${result}`
       })
@@ -205,16 +185,26 @@ ${result}`
 startBot()
 
 // =============================
-// SERVIDOR WEB (OBLIGATORIO EN RENDER)
+// SERVIDOR WEB
 // =============================
 const app = express()
 
 app.get("/", (req, res) => {
-  res.send("Bot activo ✅")
+  res.send("Bot activo ?")
 })
 
-const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
   console.log("Servidor web puerto " + PORT)
 })
 
+// =============================
+// ANTI SLEEP 24/7
+// =============================
+if (RENDER_URL) {
+  setInterval(async () => {
+    try {
+      await axios.get(RENDER_URL)
+      console.log("Ping anti-sleep")
+    } catch {}
+  }, 5 * 60 * 1000)
+}
