@@ -1,4 +1,13 @@
 // =============================
+// 🔥 BORRAR SESIÓN (SOLO UNA VEZ)
+// =============================
+const fs = require("fs")
+
+if (fs.existsSync("./auth")) {
+  fs.rmSync("./auth", { recursive: true, force: true })
+  console.log("Sesión eliminada")
+}
+// =============================
 // IMPORTS
 // =============================
 const makeWASocket = require("@whiskeysockets/baileys").default
@@ -215,3 +224,4 @@ const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
   console.log("Servidor web en puerto " + PORT)
 })
+
