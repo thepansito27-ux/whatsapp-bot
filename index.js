@@ -24,7 +24,7 @@ async function startBot() {
   // =============================
   if (!sock.authState.creds.registered) {
 
-    const phoneNumber = "591XXXXXXXX" // 👈 CAMBIA POR TU NUMERO REAL
+    const phoneNumber = "59175324655" // 👈 CAMBIA POR TU NUMERO REAL
 
     const code = await sock.requestPairingCode(phoneNumber)
     console.log("=================================")
@@ -217,3 +217,4 @@ const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
   console.log("Servidor web puerto " + PORT)
 })
+
